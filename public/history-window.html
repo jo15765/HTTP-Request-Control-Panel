@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Request history — HTTP Client</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep: #07080c;
+      --bg-raised: #12151d;
+      --surface: #181c27;
+      --surface-hover: #1e2330;
+      --border: rgba(255, 255, 255, 0.06);
+      --text: #f1f3f7;
+      --text-secondary: #9aa3b2;
+      --text-tertiary: #6b7280;
+      --accent: #818cf8;
+      --accent-dim: rgba(129, 140, 248, 0.12);
+      --success: #4ade80;
+      --error: #f87171;
+      --error-dim: rgba(248, 113, 113, 0.1);
+      --font-sans: "Inter", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --radius-sm: 7px;
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg-deep);
+      background-image:
+        radial-gradient(ellipse 100% 60% at 50% -30%, rgba(99, 102, 241, 0.12), transparent 55%);
+    }
+    .hw-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 22px 24px 32px;
+    }
+    .hw-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .hw-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-tertiary);
+      margin: 0 0 6px;
+    }
+    .hw-sub {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 42rem;
+    }
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      padding: 8px 14px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .btn:hover {
+      border-color: var(--text-tertiary);
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+    .hw-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) 1fr;
+      gap: 16px;
+      align-items: stretch;
+      min-height: min(70vh, 640px);
+      max-height: min(78vh, 720px);
+    }
+    .history-list {
+      overflow-y: auto;
+      padding: 4px;
+      margin: -4px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+    }
+    .history-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 10px 12px;
+      text-align: left;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+    }
+    .history-item:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: var(--surface-hover);
+    }
+    .history-item--active {
+      border-color: rgba(129, 140, 248, 0.45);
+      background: var(--accent-dim);
+    }
+    .history-item__row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .history-item__method {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .history-item__method--GET { color: var(--success); }
+    .history-item__method--POST { color: #fbbf24; }
+    .history-item__status {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .history-item__status--ok { color: var(--success); }
+    .history-item__status--warn { color: #fbbf24; }
+    .history-item__status--err { color: var(--error); }
+    .history-item__time {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+    }
+    .history-item__url {
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .history-detail {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      overflow: hidden;
+    }
+    .history-detail__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+    }
+    .history-detail__toolbar-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+    }
+    .history-detail__scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 14px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .history-detail__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: baseline;
+      font-size: 13px;
+    }
+    .history-detail__meta strong {
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .history-detail__empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+    .sub-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-top: 0;
+      margin-bottom: 6px;
+    }
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e6ed;
+    }
+    pre.history-raw-headers { max-height: 160px; overflow: auto; }
+    pre.history-raw-body {
+      min-height: 72px;
+      flex: 1;
+      margin: 0;
+    }
+    pre.history-raw-body.history-raw-body--expanded {
+      max-height: min(52vh, 480px);
+      overflow: auto;
+    }
+    .history-body-toggle-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+    .history-body-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .history-body-chevron {
+      display: inline-block;
+      width: 1em;
+      font-size: 10px;
+      color: var(--accent);
+    }
+    .sidebar__empty {
+      padding: 16px 12px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 720px) {
+      .hw-layout {
+        grid-template-columns: 1fr;
+        max-height: none;
+      }
+      .history-list { max-height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hw-wrap">
+    <header class="hw-head">
+      <div>
+        <p class="hw-title">Request history</p>
+        <p class="hw-sub">All sends from this app (raw wire body). Truncate preview — use <strong style="color: var(--text); font-weight: 600">Show full response</strong> to expand. Use <strong style="color: var(--text); font-weight: 600">File → Close window</strong> when done.</p>
+      </div>
+      <button type="button" class="btn" id="hwRefresh">Refresh</button>
+      <button type="button" class="btn" id="hwClear" style="border-color: rgba(248,113,113,0.25)">Clear all</button>
+    </header>
+    <div class="hw-layout">
+      <div class="history-list" id="hwList"></div>
+      <div class="history-detail">
+        <div class="history-detail__toolbar">
+          <span class="history-detail__toolbar-title">Selected run</span>
+          <button type="button" class="btn hidden" id="hwExport">Export raw body</button>
+        </div>
+        <div class="history-detail__scroll">
+          <div class="history-detail__empty" id="hwEmpty">Select a run from the list.</div>
+          <div class="history-detail__content hidden" id="hwContent">
+            <div class="history-detail__meta" id="hwMeta"></div>
+            <div>
+              <div class="sub-label">Response headers</div>
+              <pre id="hwHeaders" class="history-raw-headers"></pre>
+            </div>
+            <div>
+              <div class="sub-label">Response body (raw)</div>
+              <div class="history-body-toggle-row hidden" id="hwBodyToggleRow">
+                <button type="button" class="btn history-body-toggle" id="hwBodyToggle" aria-expanded="false">
+                  <span id="hwChevron" class="history-body-chevron">▶</span>
+                  <span id="hwToggleLabel">Show full response</span>
+                </button>
+              </div>
+              <pre id="hwBody" class="history-raw-body"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const PREVIEW = 480;
+      const listEl = document.getElementById("hwList");
+      const emptyEl = document.getElementById("hwEmpty");
+      const contentEl = document.getElementById("hwContent");
+      const metaEl = document.getElementById("hwMeta");
+      const headersEl = document.getElementById("hwHeaders");
+      const bodyEl = document.getElementById("hwBody");
+      const toggleRow = document.getElementById("hwBodyToggleRow");
+      const toggleBtn = document.getElementById("hwBodyToggle");
+      const chevronEl = document.getElementById("hwChevron");
+      const toggleLabel = document.getElementById("hwToggleLabel");
+      const exportBtn = document.getElementById("hwExport");
+
+      let items = [];
+      let selectedId = null;
+      let bodyExpanded = false;
+      let bodyRaw = "";
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function formatTime(ts) {
+        try {
+          return new Date(ts).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+        } catch {
+          return "";
+        }
+      }
+
+      function methodClass(m) {
+        const x = (m || "GET").toUpperCase();
+        if (x === "GET") return "history-item__method--GET";
+        if (x === "POST") return "history-item__method--POST";
+        return "";
+      }
+
+      function pieces(raw) {
+        const s = raw == null ? "" : String(raw);
+        if (!s) return { preview: "(empty body)", full: "", truncated: false, isEmpty: true };
+        if (s.length <= PREVIEW) return { preview: s, full: s, truncated: false, isEmpty: false };
+        return {
+          preview: s.slice(0, PREVIEW).trimEnd() + " …",
+          full: s,
+          truncated: true,
+          isEmpty: false,
+        };
+      }
+
+      function applyBodyView(expanded) {
+        bodyExpanded = expanded;
+        const p = pieces(bodyRaw);
+        if (p.isEmpty) {
+          toggleRow.classList.add("hidden");
+          bodyEl.textContent = p.preview;
+          bodyEl.classList.remove("history-raw-body--expanded");
+          return;
+        }
+        if (!p.truncated) {
+          toggleRow.classList.add("hidden");
+          bodyEl.textContent = p.full;
+          bodyEl.classList.remove("history-raw-body--expanded");
+          return;
+        }
+        toggleRow.classList.remove("hidden");
+        toggleBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+        chevronEl.textContent = expanded ? "▼" : "▶";
+        toggleLabel.textContent = expanded ? "Collapse response" : "Show full response";
+        bodyEl.textContent = expanded ? p.full : p.preview;
+        bodyEl.classList.toggle("history-raw-body--expanded", expanded);
+      }
+
+      toggleBtn.addEventListener("click", () => applyBodyView(!bodyExpanded));
+
+      function showDetail(item) {
+        if (!item) {
+          emptyEl.classList.remove("hidden");
+          contentEl.classList.add("hidden");
+          exportBtn.classList.add("hidden");
+          return;
+        }
+        emptyEl.classList.add("hidden");
+        contentEl.classList.remove("hidden");
+        exportBtn.classList.remove("hidden");
+
+        const meta = [];
+        if (item.requestOk && item.status != null) {
+          meta.push(
+            `<span><strong>Status</strong> ${escapeHtml(String(item.status))} ${escapeHtml(item.statusMessage || "")}</span>`
+          );
+        } else {
+          meta.push(
+            `<span><strong>Result</strong> <span style="color:var(--error)">${escapeHtml(item.errorLabel || "Failed")}</span></span>`
+          );
+        }
+        meta.push(`<span><strong>Method</strong> ${escapeHtml((item.method || "").toUpperCase())}</span>`);
+        meta.push(
+          `<span><strong>URL</strong> <span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(item.url || "")}</span></span>`
+        );
+        if (item.durationMs != null) {
+          meta.push(`<span><strong>Duration</strong> ${escapeHtml(String(item.durationMs))} ms</span>`);
+        }
+        meta.push(`<span><strong>When</strong> ${escapeHtml(formatTime(item.at))}</span>`);
+        metaEl.innerHTML = meta.join("");
+
+        headersEl.textContent = item.headersText != null ? String(item.headersText) : "(no headers)";
+        bodyRaw = item.bodyRaw != null ? String(item.bodyRaw) : "";
+        applyBodyView(false);
+      }
+
+      function renderList() {
+        listEl.replaceChildren();
+        if (!items.length) {
+          const p = document.createElement("p");
+          p.className = "sidebar__empty";
+          p.textContent = "No history yet. Send requests from the main window.";
+          listEl.appendChild(p);
+          selectedId = null;
+          showDetail(null);
+          return;
+        }
+        items.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "history-item" + (item.id === selectedId ? " history-item--active" : "");
+          const row = document.createElement("div");
+          row.className = "history-item__row";
+          const M = (item.method || "GET").toUpperCase();
+          const meth = document.createElement("span");
+          meth.className = "history-item__method " + methodClass(M);
+          meth.textContent = M;
+          const st = document.createElement("span");
+          st.className = "history-item__status";
+          if (item.requestOk && item.status != null) {
+            st.textContent = String(item.status);
+            const c = item.status;
+            st.classList.add(
+              c >= 200 && c < 300 ? "history-item__status--ok" : c >= 400 ? "history-item__status--err" : "history-item__status--warn"
+            );
+          } else {
+            st.textContent = "Fail";
+            st.classList.add("history-item__status--err");
+          }
+          const tm = document.createElement("span");
+          tm.className = "history-item__time";
+          tm.textContent = formatTime(item.at);
+          row.appendChild(meth);
+          row.appendChild(st);
+          row.appendChild(tm);
+          const url = document.createElement("div");
+          url.className = "history-item__url";
+          url.textContent = item.url || "";
+          url.title = item.url || "";
+          btn.appendChild(row);
+          btn.appendChild(url);
+          btn.addEventListener("click", () => {
+            selectedId = item.id;
+            renderList();
+          });
+          listEl.appendChild(btn);
+        });
+        const sel = items.find((i) => i.id === selectedId);
+        if (sel) showDetail(sel);
+        else {
+          selectedId = null;
+          showDetail(null);
+        }
+      }
+
+      async function load() {
+        if (!window.httpClient || typeof window.httpClient.historyGet !== "function") {
+          items = [];
+          renderList();
+          return;
+        }
+        try {
+          const data = await window.httpClient.historyGet();
+          items = Array.isArray(data) ? data : [];
+        } catch {
+          items = [];
+        }
+        renderList();
+      }
+
+      document.getElementById("hwRefresh").addEventListener("click", () => load());
+
+      document.getElementById("hwClear").addEventListener("click", async () => {
+        if (!confirm("Remove all run history from this device?")) return;
+        if (window.httpClient?.historyClear) await window.httpClient.historyClear();
+        await load();
+      });
+
+      exportBtn.addEventListener("click", () => {
+        const item = items.find((i) => i.id === selectedId);
+        if (!item) return;
+        const raw = item.bodyRaw != null ? String(item.bodyRaw) : "";
+        const blob = new Blob([raw], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `history-raw-${formatTime(item.at).replace(/[/\\:]/g, "-")}.txt`;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      if (window.httpClient && typeof window.httpClient.onHistoryUpdated === "function") {
+        window.httpClient.onHistoryUpdated(() => {
+          void load();
+        });
+      }
+
+      load();
+    })();
+  </script>
+</body>
+</html>

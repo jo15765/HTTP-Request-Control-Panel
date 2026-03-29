@@ -1,0 +1,2604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HTTP Client</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep: #07080c;
+      --bg: #0c0e14;
+      --bg-raised: #12151d;
+      --surface: #181c27;
+      --surface-hover: #1e2330;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-focus: rgba(129, 140, 248, 0.45);
+      --text: #f1f3f7;
+      --text-secondary: #9aa3b2;
+      --text-tertiary: #6b7280;
+      --accent: #818cf8;
+      --accent-dim: rgba(129, 140, 248, 0.12);
+      --accent-hover: #a5b4fc;
+      --success: #4ade80;
+      --success-dim: rgba(74, 222, 128, 0.12);
+      --error: #f87171;
+      --error-dim: rgba(248, 113, 113, 0.1);
+      --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --radius: 10px;
+      --radius-sm: 7px;
+      --radius-lg: 14px;
+      --shadow: 0 4px 32px rgba(0, 0, 0, 0.35);
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { -webkit-font-smoothing: antialiased; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg-deep);
+      background-image:
+        radial-gradient(ellipse 100% 60% at 50% -30%, rgba(99, 102, 241, 0.14), transparent 55%),
+        radial-gradient(ellipse 80% 50% at 100% 50%, rgba(129, 140, 248, 0.05), transparent);
+    }
+
+    .app-shell {
+      display: flex;
+      align-items: stretch;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 268px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+      z-index: 1;
+    }
+    .sidebar__brand {
+      padding: 20px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar__app-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin: 0;
+    }
+    .sidebar__app-tag {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+    .sidebar__toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar__toolbar .btn {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .sidebar__section-label {
+      padding: 12px 18px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-tertiary);
+    }
+    .sidebar__list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 10px 20px;
+      min-height: 120px;
+    }
+    .sidebar__empty {
+      padding: 16px 14px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      line-height: 1.5;
+      text-align: center;
+    }
+    .saved-req-row {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .saved-req-item {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+    }
+    .saved-req-item:hover {
+      background: var(--surface-hover);
+      border-color: var(--border);
+    }
+    .saved-req-item--active {
+      background: var(--accent-dim);
+      border-color: rgba(129, 140, 248, 0.35);
+    }
+    .saved-req-item__method {
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      min-width: 2.5rem;
+    }
+    .saved-req-item__method--GET { color: var(--success); }
+    .saved-req-item__method--POST { color: #fbbf24; }
+    .saved-req-item__method--PUT,
+    .saved-req-item__method--PATCH { color: #38bdf8; }
+    .saved-req-item__method--DELETE { color: var(--error); }
+    .saved-req-item__name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+    .saved-req-del {
+      flex-shrink: 0;
+      width: 36px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-tertiary);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .saved-req-del:hover {
+      color: var(--error);
+      background: var(--error-dim);
+      border-color: rgba(248, 113, 113, 0.25);
+    }
+
+    .main-column {
+      flex: 1;
+      min-width: 0;
+      overflow-x: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wrap {
+      max-width: min(1320px, 100%);
+      margin: 0 auto;
+      padding: 28px 28px 56px;
+      width: 100%;
+    }
+
+    .app-header {
+      margin-bottom: 24px;
+    }
+    .app-header__title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 4px;
+      color: var(--text);
+    }
+    .app-header__subtitle {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .request-card {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .request-card__method {
+      flex: 0 0 auto;
+    }
+    .request-card__method select {
+      height: 100%;
+      min-height: 48px;
+      min-width: 108px;
+      padding: 0 32px 0 16px;
+      margin: 0;
+      border: none;
+      border-right: 1px solid var(--border);
+      border-radius: 0;
+      background-color: var(--bg-raised);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239aa3b2' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      appearance: none;
+    }
+    .request-card__method select:hover {
+      background-color: var(--surface-hover);
+    }
+    .request-card__method select:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 2px var(--border-focus);
+    }
+    .request-card__url {
+      flex: 1 1 200px;
+      min-width: 0;
+    }
+    .request-card__url input {
+      width: 100%;
+      height: 100%;
+      min-height: 48px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 0;
+      background: var(--surface);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .request-card__url input::placeholder {
+      color: var(--text-tertiary);
+    }
+    .request-card__url input:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 2px var(--border-focus);
+    }
+    .request-card__send {
+      flex: 0 0 auto;
+    }
+    .request-card__send .btn-send {
+      height: 100%;
+      min-height: 48px;
+      padding: 0 24px;
+      border: none;
+      border-radius: 0;
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: filter 0.15s var(--ease), transform 0.1s var(--ease);
+    }
+    .request-card__send .btn-send:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+    .request-card__send .btn-send:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    .request-card__send .btn-send:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    label.field-label,
+    .field-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-tertiary);
+      margin-bottom: 8px;
+    }
+
+    select:not(.request-card__method select),
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      max-width: 520px;
+      padding: 10px 14px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+    }
+    select:not(.request-card__method select):focus,
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 100%;
+    }
+
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .btn--ghost {
+      padding: 8px 14px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn--ghost:hover {
+      border-color: var(--text-tertiary);
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+    .btn--dashed {
+      margin-top: 12px;
+      width: 100%;
+      padding: 10px 14px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .btn--dashed:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+      margin-top: 20px;
+      overflow: visible;
+    }
+    .panel-body {
+      padding: 20px 22px 22px;
+    }
+    .panel__heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin: 0 0 16px;
+    }
+
+    .section-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 12px;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+    }
+    .section-tabs .section-tab {
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .section-tabs .section-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .section-tabs .section-tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .kv-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .kv-line {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .kv-line input {
+      flex: 1;
+      padding: 9px 12px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .kv-line input:focus {
+      outline: none;
+      border-color: var(--border-focus);
+    }
+    .kv-line button.remove {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      color: var(--text-tertiary);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .kv-line button.remove:hover {
+      color: var(--error);
+      border-color: rgba(248, 113, 113, 0.35);
+      background: var(--error-dim);
+    }
+
+    .auth-type-row {
+      margin-bottom: 20px;
+    }
+    .auth-type-row select {
+      max-width: 320px;
+    }
+    .auth-fields .auth-block {
+      margin-top: 8px;
+    }
+    .auth-fields .inline-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .auth-fields .inline-row > div {
+      flex: 1;
+      min-width: 160px;
+    }
+    .auth-inline-gap {
+      margin-bottom: 14px;
+    }
+
+    .hint {
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 14px;
+      margin-bottom: 0;
+    }
+    .hint--flush {
+      margin-top: 0;
+    }
+    .hint code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 2px 7px;
+      background: var(--bg-raised);
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
+    .resp-panel__top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .resp-panel__top .panel__heading {
+      margin-bottom: 0;
+    }
+    .resp-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+    }
+    .resp-toolbar__label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      margin-right: 4px;
+    }
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .toggle-chip:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--text);
+    }
+    .toggle-chip:has(input:checked) {
+      border-color: rgba(129, 140, 248, 0.35);
+      background: var(--accent-dim);
+      color: var(--text);
+    }
+    .toggle-chip input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-height: 44px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg-deep);
+    }
+    .badge.ok {
+      color: var(--success);
+      background: var(--success-dim);
+    }
+    .badge.err {
+      color: var(--error);
+      background: var(--error-dim);
+    }
+    .response-meta {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .resp-tabs {
+      display: inline-flex;
+      padding: 4px;
+      gap: 2px;
+      margin-bottom: 14px;
+      background: var(--bg-raised);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .resp-tabs .tab {
+      padding: 7px 18px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .resp-tabs .tab:hover {
+      color: var(--text);
+    }
+    .resp-tabs .tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px 18px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: auto;
+      max-height: min(48vh, 480px);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e6ed;
+    }
+    pre.body-pre {
+      max-height: min(52vh, 520px);
+    }
+
+    .btn--sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn--ghost:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    #bodyStack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 0;
+    }
+    .body-source-tabs-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .body-source-tabs-inner {
+      display: inline-flex;
+      padding: 4px;
+      gap: 2px;
+      background: var(--bg-raised);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .body-source-tab {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .body-source-tab:hover {
+      color: var(--text);
+    }
+    .body-source-tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+    .body-view-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 0;
+    }
+    .body-view-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .body-view-toolbar__text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .body-view-toolbar__title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+    }
+    .body-view-toolbar__hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    #bodyPaneFiltered .json-filter-panel {
+      margin-top: 0;
+      margin-bottom: 12px;
+      max-height: min(34vh, 360px);
+      flex-shrink: 0;
+    }
+    pre.body-pre--filtered {
+      flex: 1 1 auto;
+      min-height: 140px;
+      max-height: min(42vh, 440px);
+    }
+
+    .json-filter-panel {
+      margin-top: 12px;
+      padding: 14px 16px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      min-height: 80px;
+      max-height: min(42vh, 440px);
+      overflow: auto;
+    }
+    .json-path-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .json-path-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      margin: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+    }
+    .json-path-row:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: var(--surface-hover);
+    }
+    .json-path-row input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex-shrink: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .json-path-name {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 7rem;
+    }
+    .json-path-preview {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .json-path-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .json-path-block--parent-hidden .json-path-sublist {
+      opacity: 0.42;
+      pointer-events: none;
+    }
+    .json-path-sublist {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-left: 28px;
+      border-left: 2px solid rgba(129, 140, 248, 0.25);
+      margin-left: 6px;
+    }
+    .json-path-row--nested {
+      padding: 8px 12px;
+    }
+    .json-path-row--nested .json-path-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      min-width: 0;
+    }
+    .sub-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-top: 16px;
+      margin-bottom: 6px;
+    }
+    .pane-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-bottom: 10px;
+    }
+
+    #headersSection {
+      margin-top: 8px;
+    }
+
+    #historySection {
+      margin-top: 8px;
+    }
+    .history-panel__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .history-panel__hint {
+      margin-top: 0;
+      margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .history-em {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .history-layout {
+      display: grid;
+      grid-template-columns: minmax(200px, 280px) 1fr;
+      gap: 16px;
+      align-items: stretch;
+      min-height: min(52vh, 480px);
+      max-height: min(58vh, 560px);
+    }
+    .history-list {
+      overflow-y: auto;
+      padding: 4px;
+      margin: -4px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+    }
+    .history-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 10px 12px;
+      text-align: left;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+    }
+    .history-item:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: var(--surface-hover);
+    }
+    .history-item--active {
+      border-color: rgba(129, 140, 248, 0.45);
+      background: var(--accent-dim);
+    }
+    .history-item__row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .history-item__method {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .history-item__method--GET { color: var(--success); }
+    .history-item__method--POST { color: #fbbf24; }
+    .history-item__status {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .history-item__status--ok { color: var(--success); }
+    .history-item__status--warn { color: #fbbf24; }
+    .history-item__status--err { color: var(--error); }
+    .history-item__time {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+    }
+    .history-item__url {
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .history-detail {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      overflow: hidden;
+    }
+    .history-detail__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+    }
+    .history-detail__toolbar-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+    }
+    .history-detail__scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 14px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .history-detail__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: baseline;
+      font-size: 13px;
+    }
+    .history-detail__meta strong {
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .history-detail__empty {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+    .history-body-toggle-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .history-body-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .history-body-chevron {
+      display: inline-block;
+      width: 1em;
+      font-size: 10px;
+      color: var(--accent);
+    }
+    pre.history-raw-body {
+      max-height: none;
+      flex: 1;
+      min-height: 72px;
+      margin: 0;
+      transition: max-height 0.2s var(--ease);
+    }
+    pre.history-raw-body.history-raw-body--expanded {
+      max-height: min(50vh, 420px);
+      overflow: auto;
+    }
+    pre.history-raw-headers {
+      max-height: 160px;
+      margin: 0;
+      font-size: 11px;
+    }
+
+    .hidden { display: none !important; }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .request-card *:focus-visible,
+    .toggle-chip:focus-within {
+      outline: none;
+    }
+    .request-card__method select:focus-visible,
+    .request-card__url input:focus-visible {
+      outline: none;
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        max-height: min(240px, 38vh);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        box-shadow: none;
+      }
+      .sidebar__list {
+        max-height: 140px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .wrap {
+        padding: 20px 16px 40px;
+      }
+      .request-card {
+        flex-direction: column;
+      }
+      .request-card__method select {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .request-card__send .btn-send {
+        width: 100%;
+        min-height: 44px;
+      }
+      .resp-panel__top {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .resp-panel__top .btn--ghost {
+        width: 100%;
+      }
+      .body-source-tab {
+        padding: 8px 14px;
+        font-size: 12px;
+      }
+      .body-view-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .body-view-toolbar .btn {
+        align-self: flex-end;
+      }
+      .history-layout {
+        grid-template-columns: 1fr;
+        max-height: none;
+      }
+      .history-list {
+        max-height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Saved requests">
+      <div class="sidebar__brand">
+        <p class="sidebar__app-name">HTTP Client</p>
+        <span class="sidebar__app-tag">Saved requests</span>
+      </div>
+      <div class="sidebar__toolbar">
+        <button type="button" class="btn btn--ghost btn--sm" id="newRequestBtn">New</button>
+        <button type="button" class="btn btn--ghost btn--sm" id="saveRequestBtn">Save</button>
+        <button type="button" class="btn btn--ghost btn--sm" id="saveRequestAsBtn">Save as…</button>
+      </div>
+      <div class="sidebar__section-label">Library</div>
+      <div class="sidebar__list" id="savedRequestsList"></div>
+    </aside>
+    <main class="main-column">
+  <div class="wrap">
+    <header class="app-header">
+      <h1 class="app-header__title">Request</h1>
+      <p class="app-header__subtitle">Build requests, inspect JSON, and filter fields — without leaving this window.</p>
+    </header>
+
+    <div class="request-card" role="group" aria-label="Request URL">
+      <div class="request-card__method">
+        <select id="method" aria-label="HTTP method">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PUT</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+          <option>HEAD</option>
+          <option>OPTIONS</option>
+        </select>
+      </div>
+      <div class="request-card__url">
+        <input type="url" id="url" placeholder="https://api.example.com/v1/resource" autocomplete="off" />
+      </div>
+      <div class="request-card__send">
+        <button type="button" class="btn-send" id="send">Send</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="section-tabs" id="reqTabs" role="tablist">
+        <button type="button" class="section-tab active" data-req-tab="params" role="tab" aria-selected="true">Params</button>
+        <button type="button" class="section-tab" data-req-tab="auth" role="tab" aria-selected="false">Authorization</button>
+        <button type="button" class="section-tab" data-req-tab="headers" role="tab" aria-selected="false">Headers</button>
+        <button type="button" class="section-tab" data-req-tab="body" role="tab" aria-selected="false">Body</button>
+      </div>
+      <div class="panel-body">
+        <div class="req-pane" data-req-pane="params" role="tabpanel">
+          <p class="hint hint--flush">Query parameters are appended to the URL when you send the request.</p>
+          <div class="kv-editor" id="params"></div>
+          <button type="button" class="btn btn--dashed" id="addParam">+ Add query parameter</button>
+        </div>
+        <div class="req-pane hidden" data-req-pane="auth" role="tabpanel">
+          <div class="auth-type-row">
+            <span class="field-label">Type</span>
+            <select id="authType" aria-label="Authorization type">
+              <option value="none">No Auth</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="basic">Basic Auth</option>
+              <option value="apikey">API Key</option>
+            </select>
+          </div>
+          <div class="auth-fields">
+            <div class="auth-block hidden" data-auth="bearer">
+              <span class="field-label">Token</span>
+              <textarea id="bearerToken" placeholder="Paste bearer token" rows="3" autocomplete="off"></textarea>
+            </div>
+            <div class="auth-block hidden" data-auth="basic">
+              <div class="inline-row">
+                <div>
+                  <span class="field-label">Username</span>
+                  <input type="text" id="basicUser" autocomplete="username" />
+                </div>
+                <div>
+                  <span class="field-label">Password</span>
+                  <input type="password" id="basicPass" autocomplete="current-password" />
+                </div>
+              </div>
+            </div>
+            <div class="auth-block hidden" data-auth="apikey">
+              <div class="inline-row auth-inline-gap">
+                <div>
+                  <span class="field-label">Key</span>
+                  <input type="text" id="apiKeyName" placeholder="e.g. X-API-Key" value="X-API-Key" />
+                </div>
+                <div>
+                  <span class="field-label">Value</span>
+                  <input type="text" id="apiKeyValue" placeholder="your-api-key" autocomplete="off" />
+                </div>
+              </div>
+              <span class="field-label">Add to</span>
+              <select id="apiKeyAddTo" aria-label="API key location">
+                <option value="header">Header</option>
+                <option value="query">Query params</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">Authorization values are applied on send. They override a manual <code style="color:var(--muted)">Authorization</code> header when using Bearer or Basic.</p>
+        </div>
+        <div class="req-pane hidden" data-req-pane="headers" role="tabpanel">
+          <div class="kv-editor" id="headers"></div>
+          <button type="button" class="btn btn--dashed" id="addHeader">+ Add header</button>
+        </div>
+        <div class="req-pane hidden" data-req-pane="body" role="tabpanel">
+          <textarea id="body" placeholder='JSON e.g. {"name": "value"} or raw text'></textarea>
+          <p class="hint">Used for POST, PUT, PATCH. Hidden for methods that typically have no body.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-body">
+        <div class="resp-panel__top">
+          <h2 class="panel__heading">Response</h2>
+          <button type="button" class="btn btn--ghost" id="popResponse">Pop out viewer</button>
+        </div>
+        <div class="resp-toolbar">
+          <span class="resp-toolbar__label">Show</span>
+          <label class="toggle-chip"><input type="checkbox" id="visStatus" checked /> Status</label>
+          <label class="toggle-chip"><input type="checkbox" id="visTabs" checked /> Tabs</label>
+          <label class="toggle-chip"><input type="checkbox" id="visBody" checked /> Body</label>
+          <label class="toggle-chip"><input type="checkbox" id="visHeaders" checked /> Headers</label>
+          <label class="toggle-chip"><input type="checkbox" id="visJsonTree" checked /> JSON filter</label>
+        </div>
+        <div class="status-bar" id="statusBar">
+          <span class="response-meta">Send a request to see the response.</span>
+        </div>
+        <div class="resp-tabs" id="respTabs">
+          <button type="button" class="tab active" data-resp-tab="body">Body</button>
+          <button type="button" class="tab" data-resp-tab="headers">Headers</button>
+          <button type="button" class="tab" data-resp-tab="history">History</button>
+        </div>
+        <div id="bodySection">
+          <div class="pane-title hidden" id="bodySectionTitle">Body</div>
+          <div id="bodyStack">
+            <div class="body-source-tabs-wrap hidden" id="bodySourceTabsWrap" role="tablist" aria-label="Response body source">
+              <div class="body-source-tabs-inner">
+                <button type="button" class="body-source-tab active" data-body-source="original" role="tab" aria-selected="true">
+                  Original
+                </button>
+                <button type="button" class="body-source-tab" data-body-source="filtered" role="tab" aria-selected="false">
+                  Filtered
+                </button>
+              </div>
+            </div>
+            <div id="bodyPaneOriginal" class="body-view-pane">
+              <div class="body-view-toolbar">
+                <div class="body-view-toolbar__text">
+                  <span class="body-view-toolbar__title">Response body</span>
+                  <span class="body-view-toolbar__hint hidden" id="originalViewHint">As returned by the server</span>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" id="exportOriginalJson">Export JSON</button>
+              </div>
+              <pre id="outBody" class="out-pane body-pre"></pre>
+            </div>
+            <div id="bodyPaneFiltered" class="body-view-pane hidden">
+              <div class="body-view-toolbar">
+                <div class="body-view-toolbar__text">
+                  <span class="body-view-toolbar__title">Filtered JSON</span>
+                  <span class="body-view-toolbar__hint">Adjust checkboxes below, then export this view</span>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" id="exportFilteredJson">Export JSON</button>
+              </div>
+              <div class="sub-label hidden" id="treeLabel">Include fields (top-level and inside array objects)</div>
+              <div id="jsonTreePanel" class="json-filter-panel hidden"></div>
+              <pre id="outFiltered" class="out-pane body-pre body-pre--filtered hidden"></pre>
+            </div>
+          </div>
+        </div>
+        <div id="headersSection" class="hidden">
+          <div class="pane-title hidden" id="headersSectionTitle">Headers</div>
+          <pre id="outHeaders" class="out-pane"></pre>
+        </div>
+        <div id="historySection" class="hidden">
+          <div class="pane-title hidden" id="historySectionTitle">History</div>
+          <div class="history-panel">
+            <div class="history-panel__toolbar">
+              <span class="body-view-toolbar__title">Previous runs</span>
+              <button type="button" class="btn btn--ghost btn--sm" id="clearHistoryBtn">Clear all</button>
+            </div>
+            <p class="hint history-panel__hint">
+              Runs are saved on disk (Electron) and persist between sessions. Use <span class="history-em">File → View request history</span> for a dedicated window. Raw body matches the wire, not the pretty-printed Body tab — expand with the control below when truncated.
+            </p>
+            <div class="history-layout">
+              <div class="history-list" id="historyList"></div>
+              <div class="history-detail" id="historyDetailShell">
+                <div class="history-detail__toolbar">
+                  <span class="history-detail__toolbar-title">Raw response</span>
+                  <button type="button" class="btn btn--ghost btn--sm hidden" id="exportHistoryRawBtn">Export raw body</button>
+                </div>
+                <div class="history-detail__scroll">
+                  <div class="history-detail__empty" id="historyDetailEmpty">Select a run from the list to inspect status, headers, and the unmodified response body.</div>
+                  <div class="history-detail__content hidden" id="historyDetailContent">
+                    <div class="history-detail__meta" id="historyDetailMeta"></div>
+                    <div>
+                      <div class="sub-label" style="margin-top: 0">Response headers</div>
+                      <pre id="historyDetailHeaders" class="out-pane history-raw-headers"></pre>
+                    </div>
+                    <div>
+                      <div class="sub-label" style="margin-top: 0">Response body (raw)</div>
+                      <div class="history-body-toggle-row hidden" id="historyBodyToggleRow">
+                        <button type="button" class="btn btn--ghost btn--sm history-body-toggle" id="historyBodyToggle" aria-expanded="false">
+                          <span id="historyBodyToggleIcon" class="history-body-chevron" aria-hidden="true">▶</span>
+                          <span id="historyBodyToggleLabel">Show full response</span>
+                        </button>
+                      </div>
+                      <pre id="historyDetailBody" class="out-pane history-raw-body"></pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+    </main>
+  </div>
+
+  <script src="response-shared.js"></script>
+  <script>
+    const methodEl = document.getElementById("method");
+    const urlEl = document.getElementById("url");
+    const bodyEl = document.getElementById("body");
+    const sendBtn = document.getElementById("send");
+    const headersContainer = document.getElementById("headers");
+    const paramsContainer = document.getElementById("params");
+    const statusBar = document.getElementById("statusBar");
+    const respTabsEl = document.getElementById("respTabs");
+    const bodySection = document.getElementById("bodySection");
+    const headersSection = document.getElementById("headersSection");
+    const historySection = document.getElementById("historySection");
+    const historySectionTitle = document.getElementById("historySectionTitle");
+    const historyListEl = document.getElementById("historyList");
+    const historyDetailEmpty = document.getElementById("historyDetailEmpty");
+    const historyDetailContent = document.getElementById("historyDetailContent");
+    const historyDetailMeta = document.getElementById("historyDetailMeta");
+    const historyDetailHeaders = document.getElementById("historyDetailHeaders");
+    const historyDetailBody = document.getElementById("historyDetailBody");
+    const historyBodyToggleRow = document.getElementById("historyBodyToggleRow");
+    const historyBodyToggle = document.getElementById("historyBodyToggle");
+    const historyBodyToggleIcon = document.getElementById("historyBodyToggleIcon");
+    const historyBodyToggleLabel = document.getElementById("historyBodyToggleLabel");
+    const exportHistoryRawBtn = document.getElementById("exportHistoryRawBtn");
+    const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+    const bodyStack = document.getElementById("bodyStack");
+    const outBody = document.getElementById("outBody");
+    const outHeaders = document.getElementById("outHeaders");
+    const jsonTreePanel = document.getElementById("jsonTreePanel");
+    const treeLabel = document.getElementById("treeLabel");
+    const outFiltered = document.getElementById("outFiltered");
+    const bodySourceTabsWrap = document.getElementById("bodySourceTabsWrap");
+    const bodyPaneOriginal = document.getElementById("bodyPaneOriginal");
+    const bodyPaneFiltered = document.getElementById("bodyPaneFiltered");
+    const originalViewHint = document.getElementById("originalViewHint");
+    const exportOriginalJsonBtn = document.getElementById("exportOriginalJson");
+    const exportFilteredJsonBtn = document.getElementById("exportFilteredJson");
+
+    let activeBodySource = "original";
+    const bodySectionTitle = document.getElementById("bodySectionTitle");
+    const headersSectionTitle = document.getElementById("headersSectionTitle");
+    const visStatus = document.getElementById("visStatus");
+    const visTabs = document.getElementById("visTabs");
+    const visBody = document.getElementById("visBody");
+    const visHeaders = document.getElementById("visHeaders");
+    const visJsonTree = document.getElementById("visJsonTree");
+    const popResponseBtn = document.getElementById("popResponse");
+    const authTypeEl = document.getElementById("authType");
+
+    let activeRespTab = "body";
+    let selectedHistoryEntryId = null;
+
+    const RUN_HISTORY_KEY = "httpClientRunHistory.v1";
+    const RUN_HISTORY_MAX = 2000;
+    const HISTORY_BODY_PREVIEW_CHARS = 480;
+
+    let historyBodyExpanded = false;
+    let historySelectedBodyRaw = "";
+    let lastBodyRaw = "";
+    let lastBodyParsed = null;
+    let lastHeadersText = "";
+    let responseHiddenPaths = new Set();
+    let popupRef = null;
+    let activeSavedRequestId = null;
+
+    const SAVED_REQ_STORAGE_KEY = "httpClientSavedRequests.v1";
+    const LAST_ACTIVE_REQUEST_KEY = "httpClientActiveRequestId";
+
+    function loadSavedRequests() {
+      try {
+        const raw = localStorage.getItem(SAVED_REQ_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function persistSavedRequests(items) {
+      try {
+        localStorage.setItem(SAVED_REQ_STORAGE_KEY, JSON.stringify(items));
+      } catch (e) {
+        alert("Could not save to browser storage: " + (e.message || String(e)));
+      }
+    }
+
+    function kvLinesToPairs(container) {
+      const pairs = [];
+      container.querySelectorAll(".kv-line").forEach((line) => {
+        const nameInput = line.querySelector(".kv-name");
+        const valueInput = line.querySelector(".kv-value");
+        if (!nameInput || !valueInput) return;
+        pairs.push({ name: nameInput.value, value: valueInput.value });
+      });
+      return pairs;
+    }
+
+    function replaceKvFromPairs(container, pairs) {
+      container.replaceChildren();
+      if (!pairs || !pairs.length) return;
+      pairs.forEach((p) => {
+        addKvRow(
+          container,
+          p && p.name != null ? String(p.name) : "",
+          p && p.value != null ? String(p.value) : ""
+        );
+      });
+    }
+
+    function serializeRequestPayload() {
+      return {
+        method: methodEl.value,
+        url: urlEl.value,
+        params: kvLinesToPairs(paramsContainer),
+        headers: kvLinesToPairs(headersContainer),
+        body: bodyEl.value,
+        auth: {
+          type: authTypeEl.value,
+          bearerToken: document.getElementById("bearerToken").value,
+          basicUser: document.getElementById("basicUser").value,
+          basicPass: document.getElementById("basicPass").value,
+          apiKeyName: document.getElementById("apiKeyName").value,
+          apiKeyValue: document.getElementById("apiKeyValue").value,
+          apiKeyAddTo: document.getElementById("apiKeyAddTo").value,
+        },
+      };
+    }
+
+    function applyRequestPayload(r) {
+      if (!r || typeof r !== "object") return;
+      methodEl.value = r.method || "GET";
+      urlEl.value = r.url || "";
+      replaceKvFromPairs(paramsContainer, Array.isArray(r.params) ? r.params : []);
+      replaceKvFromPairs(headersContainer, Array.isArray(r.headers) ? r.headers : []);
+      bodyEl.value = r.body != null ? String(r.body) : "";
+      const a = r.auth && typeof r.auth === "object" ? r.auth : {};
+      authTypeEl.value = a.type || "none";
+      document.getElementById("bearerToken").value = a.bearerToken || "";
+      document.getElementById("basicUser").value = a.basicUser || "";
+      document.getElementById("basicPass").value = a.basicPass || "";
+      document.getElementById("apiKeyName").value = a.apiKeyName || "X-API-Key";
+      document.getElementById("apiKeyValue").value = a.apiKeyValue || "";
+      document.getElementById("apiKeyAddTo").value = a.apiKeyAddTo === "query" ? "query" : "header";
+      syncAuthPanels();
+      toggleBodyTabVisibility();
+      scheduleMergeQueryParamsFromUrl();
+    }
+
+    function deriveDefaultRequestName() {
+      const raw = urlEl.value.trim();
+      if (!raw) return "Untitled request";
+      try {
+        const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        const u = new URL(withScheme);
+        const parts = u.pathname.split("/").filter(Boolean);
+        const last = parts.length ? parts[parts.length - 1] : "";
+        if (last) {
+          try {
+            return decodeURIComponent(last);
+          } catch {
+            return last;
+          }
+        }
+        return u.hostname.replace(/^www\./i, "") || "Untitled request";
+      } catch {
+        return "Untitled request";
+      }
+    }
+
+    function newRequestId() {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+      return "r-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function methodBadgeClass(method) {
+      const m = (method || "GET").toUpperCase();
+      if (m === "GET") return "saved-req-item__method--GET";
+      if (m === "POST") return "saved-req-item__method--POST";
+      if (m === "PUT" || m === "PATCH") return "saved-req-item__method--PUT";
+      if (m === "DELETE") return "saved-req-item__method--DELETE";
+      return "";
+    }
+
+    function renderSavedRequestsList() {
+      const listEl = document.getElementById("savedRequestsList");
+      if (!listEl) return;
+      const items = loadSavedRequests();
+      listEl.replaceChildren();
+      if (items.length === 0) {
+        const em = document.createElement("p");
+        em.className = "sidebar__empty";
+        em.textContent = "No saved requests yet. Configure the URL and tabs, then Save or Save as…";
+        listEl.appendChild(em);
+        return;
+      }
+      items
+        .slice()
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "saved-req-row";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "saved-req-item" + (item.id === activeSavedRequestId ? " saved-req-item--active" : "");
+          const req = item.request || {};
+          const M = (req.method || "GET").toUpperCase();
+          const meth = document.createElement("span");
+          meth.className = "saved-req-item__method " + methodBadgeClass(M);
+          meth.textContent = M;
+          const nameEl = document.createElement("span");
+          nameEl.className = "saved-req-item__name";
+          nameEl.textContent = item.name || "Untitled";
+          btn.appendChild(meth);
+          btn.appendChild(nameEl);
+          btn.addEventListener("click", () => loadSavedRequest(item.id));
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "saved-req-del";
+          del.setAttribute("aria-label", "Delete saved request");
+          del.textContent = "×";
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteSavedRequest(item.id);
+          });
+          row.appendChild(btn);
+          row.appendChild(del);
+          listEl.appendChild(row);
+        });
+    }
+
+    function rememberActiveRequestId(id) {
+      activeSavedRequestId = id;
+      try {
+        if (id) localStorage.setItem(LAST_ACTIVE_REQUEST_KEY, id);
+        else localStorage.removeItem(LAST_ACTIVE_REQUEST_KEY);
+      } catch (_) {}
+      renderSavedRequestsList();
+    }
+
+    function loadSavedRequest(id) {
+      const item = loadSavedRequests().find((x) => x.id === id);
+      if (!item || !item.request) return;
+      applyRequestPayload(item.request);
+      rememberActiveRequestId(id);
+    }
+
+    function deleteSavedRequest(id) {
+      if (!confirm("Delete this saved request?")) return;
+      const next = loadSavedRequests().filter((x) => x.id !== id);
+      persistSavedRequests(next);
+      if (activeSavedRequestId === id) {
+        rememberActiveRequestId(null);
+      } else {
+        renderSavedRequestsList();
+      }
+    }
+
+    function saveRequest() {
+      const payload = serializeRequestPayload();
+      const items = loadSavedRequests();
+      if (activeSavedRequestId) {
+        const i = items.findIndex((x) => x.id === activeSavedRequestId);
+        if (i >= 0) {
+          items[i] = {
+            ...items[i],
+            request: payload,
+            updatedAt: Date.now(),
+          };
+          persistSavedRequests(items);
+          renderSavedRequestsList();
+          return;
+        }
+      }
+      saveRequestAsPrompt();
+    }
+
+    function saveRequestAsPrompt() {
+      const name = prompt("Name this request", deriveDefaultRequestName());
+      if (name === null) return;
+      const trimmed = name.trim() || "Untitled request";
+      const now = Date.now();
+      const items = loadSavedRequests();
+      items.push({
+        id: newRequestId(),
+        name: trimmed,
+        createdAt: now,
+        updatedAt: now,
+        request: serializeRequestPayload(),
+      });
+      persistSavedRequests(items);
+      rememberActiveRequestId(items[items.length - 1].id);
+    }
+
+    function newRequestDraft() {
+      activeSavedRequestId = null;
+      try {
+        localStorage.removeItem(LAST_ACTIVE_REQUEST_KEY);
+      } catch (_) {}
+      methodEl.value = "GET";
+      urlEl.value = "";
+      replaceKvFromPairs(paramsContainer, []);
+      replaceKvFromPairs(headersContainer, []);
+      addKvRow(headersContainer, "Accept", "application/json");
+      bodyEl.value = "";
+      authTypeEl.value = "none";
+      document.getElementById("bearerToken").value = "";
+      document.getElementById("basicUser").value = "";
+      document.getElementById("basicPass").value = "";
+      document.getElementById("apiKeyName").value = "X-API-Key";
+      document.getElementById("apiKeyValue").value = "";
+      document.getElementById("apiKeyAddTo").value = "header";
+      syncAuthPanels();
+      toggleBodyTabVisibility();
+      document.querySelector('#reqTabs [data-req-tab="params"]')?.click();
+      renderSavedRequestsList();
+      urlEl.focus();
+    }
+
+    function restoreLastOrDefaultRequest() {
+      let lastId = null;
+      try {
+        lastId = localStorage.getItem(LAST_ACTIVE_REQUEST_KEY);
+      } catch (_) {}
+      if (lastId && loadSavedRequests().some((x) => x.id === lastId)) {
+        loadSavedRequest(lastId);
+        return true;
+      }
+      activeSavedRequestId = null;
+      renderSavedRequestsList();
+      return false;
+    }
+
+    function addKvRow(container, name = "", value = "") {
+      const line = document.createElement("div");
+      line.className = "kv-line";
+      line.innerHTML = `
+        <input type="text" class="kv-name" placeholder="Name" value="${escapeAttr(name)}" />
+        <input type="text" class="kv-value" placeholder="Value" value="${escapeAttr(value)}" />
+        <button type="button" class="remove" aria-label="Remove">×</button>
+      `;
+      line.querySelector(".remove").addEventListener("click", () => line.remove());
+      container.appendChild(line);
+    }
+
+    function escapeAttr(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
+    }
+
+    document.getElementById("addHeader").addEventListener("click", () => addKvRow(headersContainer));
+    document.getElementById("addParam").addEventListener("click", () => addKvRow(paramsContainer));
+
+    function upsertKvRow(container, name, value) {
+      const trimmedName = String(name || "").trim();
+      if (!trimmedName) return;
+      const strVal = value == null ? "" : String(value);
+      let found = false;
+      container.querySelectorAll(".kv-line").forEach((line) => {
+        const nameInput = line.querySelector(".kv-name");
+        if (nameInput && nameInput.value.trim() === trimmedName) {
+          line.querySelector(".kv-value").value = strVal;
+          found = true;
+        }
+      });
+      if (!found) addKvRow(container, trimmedName, strVal);
+    }
+
+    /** Reads ?query from the URL field and merges into Params (upsert by name). */
+    function mergeQueryParamsFromUrlField() {
+      const raw = urlEl.value.trim();
+      const q = raw.indexOf("?");
+      if (q < 0) return;
+      const after = raw.slice(q + 1);
+      const hashIdx = after.indexOf("#");
+      const qs = hashIdx < 0 ? after : after.slice(0, hashIdx);
+      if (!qs.trim()) return;
+      let sp;
+      try {
+        sp = new URLSearchParams(qs);
+      } catch {
+        return;
+      }
+      for (const [k, v] of sp.entries()) {
+        upsertKvRow(paramsContainer, k, v);
+      }
+    }
+
+    let urlQueryMergeTimer = null;
+    function scheduleMergeQueryParamsFromUrl() {
+      if (urlQueryMergeTimer) clearTimeout(urlQueryMergeTimer);
+      urlQueryMergeTimer = setTimeout(() => {
+        urlQueryMergeTimer = null;
+        mergeQueryParamsFromUrlField();
+      }, 350);
+    }
+
+    urlEl.addEventListener("blur", mergeQueryParamsFromUrlField);
+    urlEl.addEventListener("paste", () => setTimeout(mergeQueryParamsFromUrlField, 0));
+    urlEl.addEventListener("input", scheduleMergeQueryParamsFromUrl);
+
+    function collectKv(container) {
+      const out = {};
+      container.querySelectorAll(".kv-line").forEach((line) => {
+        const n = line.querySelector(".kv-name").value.trim();
+        const v = line.querySelector(".kv-value").value;
+        if (n) out[n] = v;
+      });
+      return out;
+    }
+
+    function base64Utf8(str) {
+      const bytes = new TextEncoder().encode(str);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    }
+
+    function applyAuth(headers, queryParams) {
+      const type = authTypeEl.value;
+      if (type === "bearer") {
+        const t = document.getElementById("bearerToken").value.trim();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
+        return;
+      }
+      if (type === "basic") {
+        const u = document.getElementById("basicUser").value;
+        const p = document.getElementById("basicPass").value;
+        if (u !== "" || p !== "") {
+          headers["Authorization"] = `Basic ${base64Utf8(`${u}:${p}`)}`;
+        }
+        return;
+      }
+      if (type === "apikey") {
+        const keyName = document.getElementById("apiKeyName").value.trim() || "X-API-Key";
+        const keyVal = document.getElementById("apiKeyValue").value;
+        if (!keyVal) return;
+        const addTo = document.getElementById("apiKeyAddTo").value;
+        if (addTo === "header") headers[keyName] = keyVal;
+        else queryParams[keyName] = keyVal;
+      }
+    }
+
+    function buildFinalUrl(baseUrl, queryParams) {
+      const u = new URL(baseUrl);
+      for (const [k, v] of Object.entries(queryParams)) {
+        if (k) u.searchParams.set(k, v);
+      }
+      return u.toString();
+    }
+
+    function syncAuthPanels() {
+      const type = authTypeEl.value;
+      document.querySelectorAll(".auth-block").forEach((el) => {
+        el.classList.toggle("hidden", el.getAttribute("data-auth") !== type);
+      });
+    }
+    authTypeEl.addEventListener("change", syncAuthPanels);
+    syncAuthPanels();
+
+    document.querySelectorAll("#reqTabs .section-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.getAttribute("data-req-tab");
+        document.querySelectorAll("#reqTabs .section-tab").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+          b.setAttribute("aria-selected", b === btn ? "true" : "false");
+        });
+        document.querySelectorAll(".req-pane").forEach((pane) => {
+          pane.classList.toggle("hidden", pane.getAttribute("data-req-pane") !== tab);
+        });
+      });
+    });
+
+    function toggleBodyTabVisibility() {
+      const m = methodEl.value;
+      const showBody = ["POST", "PUT", "PATCH"].includes(m);
+      const bodyTab = document.querySelector('#reqTabs [data-req-tab="body"]');
+      if (bodyTab) bodyTab.classList.toggle("hidden", !showBody);
+      const bodyPane = document.querySelector('[data-req-pane="body"]');
+      if (!showBody && bodyPane && !bodyPane.classList.contains("hidden")) {
+        document.querySelector('#reqTabs [data-req-tab="params"]')?.click();
+      }
+    }
+    methodEl.addEventListener("change", toggleBodyTabVisibility);
+    toggleBodyTabVisibility();
+
+    function loadRunHistoryLocal() {
+      try {
+        const raw = localStorage.getItem(RUN_HISTORY_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function persistRunHistoryLocal(entries) {
+      try {
+        localStorage.setItem(RUN_HISTORY_KEY, JSON.stringify(entries));
+      } catch (e) {
+        console.warn("Run history not saved:", e);
+      }
+    }
+
+    async function loadRunHistoryAsync() {
+      if (window.httpClient && typeof window.httpClient.historyGet === "function") {
+        try {
+          const data = await window.httpClient.historyGet();
+          return Array.isArray(data) ? data : [];
+        } catch {
+          return [];
+        }
+      }
+      return loadRunHistoryLocal();
+    }
+
+    function normalizeWireBody(body) {
+      if (body == null) return "";
+      return typeof body === "string" ? body : String(body);
+    }
+
+    async function migrateHistoryFromLocalStorage() {
+      if (!window.httpClient?.historyGet || !window.httpClient.historyAppend) return;
+      let disk;
+      try {
+        disk = await window.httpClient.historyGet();
+      } catch {
+        return;
+      }
+      if (disk.length > 0) return;
+      const local = loadRunHistoryLocal();
+      if (local.length === 0) return;
+      for (let i = local.length - 1; i >= 0; i--) {
+        await window.httpClient.historyAppend(local[i]);
+      }
+      try {
+        localStorage.removeItem(RUN_HISTORY_KEY);
+      } catch (_) {}
+    }
+
+    async function appendRunHistory(entry) {
+      if (window.httpClient && typeof window.httpClient.historyAppend === "function") {
+        await window.httpClient.historyAppend(entry);
+      } else {
+        const list = loadRunHistoryLocal();
+        list.unshift(entry);
+        while (list.length > RUN_HISTORY_MAX) list.pop();
+        persistRunHistoryLocal(list);
+      }
+      selectedHistoryEntryId = entry.id;
+      await refreshHistoryList();
+    }
+
+    async function refreshHistoryList() {
+      const items = await loadRunHistoryAsync();
+      renderHistoryListFromItems(items);
+    }
+
+    function historyMethodClass(m) {
+      const x = (m || "GET").toUpperCase();
+      if (x === "GET") return "history-item__method--GET";
+      if (x === "POST") return "history-item__method--POST";
+      return "";
+    }
+
+    function formatHistoryTime(ts) {
+      try {
+        const d = new Date(ts);
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      } catch {
+        return "";
+      }
+    }
+
+    function renderHistoryListFromItems(items) {
+      if (!historyListEl) return;
+      historyListEl.replaceChildren();
+      if (items.length === 0) {
+        const p = document.createElement("p");
+        p.className = "sidebar__empty";
+        p.style.padding = "16px 12px";
+        p.textContent = "No runs yet. Send a request to build history.";
+        historyListEl.appendChild(p);
+        selectedHistoryEntryId = null;
+        hideHistoryDetail();
+        return;
+      }
+      items.forEach((item) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "history-item" + (item.id === selectedHistoryEntryId ? " history-item--active" : "");
+        const row = document.createElement("div");
+        row.className = "history-item__row";
+        const meth = document.createElement("span");
+        const M = (item.method || "GET").toUpperCase();
+        meth.className = "history-item__method " + historyMethodClass(M);
+        meth.textContent = M;
+        const st = document.createElement("span");
+        st.className = "history-item__status";
+        if (item.requestOk && item.status != null) {
+          st.textContent = String(item.status);
+          const code = item.status;
+          st.classList.add(
+            code >= 200 && code < 300
+              ? "history-item__status--ok"
+              : code >= 400
+                ? "history-item__status--err"
+                : "history-item__status--warn"
+          );
+        } else {
+          st.textContent = "Fail";
+          st.classList.add("history-item__status--err");
+        }
+        const timeEl = document.createElement("span");
+        timeEl.className = "history-item__time";
+        timeEl.textContent = formatHistoryTime(item.at);
+        row.appendChild(meth);
+        row.appendChild(st);
+        row.appendChild(timeEl);
+        const urlRow = document.createElement("div");
+        urlRow.className = "history-item__url";
+        urlRow.textContent = item.url || "";
+        urlRow.title = item.url || "";
+        btn.appendChild(row);
+        btn.appendChild(urlRow);
+        btn.addEventListener("click", async () => {
+          selectedHistoryEntryId = item.id;
+          await refreshHistoryList();
+        });
+        historyListEl.appendChild(btn);
+      });
+      const sel = items.find((i) => i.id === selectedHistoryEntryId);
+      if (sel) showHistoryDetail(sel);
+      else {
+        selectedHistoryEntryId = null;
+        hideHistoryDetail();
+      }
+    }
+
+    function bodyPreviewPieces(raw) {
+      const s = raw == null ? "" : String(raw);
+      if (!s) return { preview: "(empty body)", full: "", truncated: false, isEmpty: true };
+      if (s.length <= HISTORY_BODY_PREVIEW_CHARS) {
+        return { preview: s, full: s, truncated: false, isEmpty: false };
+      }
+      return {
+        preview: s.slice(0, HISTORY_BODY_PREVIEW_CHARS).trimEnd() + " …",
+        full: s,
+        truncated: true,
+        isEmpty: false,
+      };
+    }
+
+    function applyHistoryBodyDisplay(expanded) {
+      historyBodyExpanded = expanded;
+      const pieces = bodyPreviewPieces(historySelectedBodyRaw);
+      if (pieces.isEmpty) {
+        historyBodyToggleRow.classList.add("hidden");
+        historyDetailBody.textContent = pieces.preview;
+        historyDetailBody.classList.remove("history-raw-body--expanded");
+        return;
+      }
+      if (!pieces.truncated) {
+        historyBodyToggleRow.classList.add("hidden");
+        historyDetailBody.textContent = pieces.full;
+        historyDetailBody.classList.remove("history-raw-body--expanded");
+        return;
+      }
+      historyBodyToggleRow.classList.remove("hidden");
+      historyBodyToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      historyBodyToggleIcon.textContent = expanded ? "▼" : "▶";
+      historyBodyToggleLabel.textContent = expanded ? "Collapse response" : "Show full response";
+      historyDetailBody.textContent = expanded ? pieces.full : pieces.preview;
+      historyDetailBody.classList.toggle("history-raw-body--expanded", expanded);
+    }
+
+    historyBodyToggle.addEventListener("click", () => {
+      applyHistoryBodyDisplay(!historyBodyExpanded);
+    });
+
+    function hideHistoryDetail() {
+      historyDetailEmpty.classList.remove("hidden");
+      historyDetailContent.classList.add("hidden");
+      exportHistoryRawBtn.classList.add("hidden");
+      historyBodyToggleRow.classList.add("hidden");
+      historySelectedBodyRaw = "";
+    }
+
+    function showHistoryDetail(item) {
+      if (!item) {
+        hideHistoryDetail();
+        return;
+      }
+      historyDetailEmpty.classList.add("hidden");
+      historyDetailContent.classList.remove("hidden");
+      exportHistoryRawBtn.classList.remove("hidden");
+
+      const metaParts = [];
+      if (item.requestOk && item.status != null) {
+        metaParts.push(
+          `<span><strong>Status</strong> ${escapeHtml(String(item.status))} ${escapeHtml(item.statusMessage || "")}</span>`
+        );
+      } else {
+        metaParts.push(
+          `<span><strong>Result</strong> <span style="color:var(--error)">${escapeHtml(item.errorLabel || "Request failed")}</span></span>`
+        );
+      }
+      metaParts.push(`<span><strong>Method</strong> ${escapeHtml((item.method || "").toUpperCase())}</span>`);
+      metaParts.push(`<span><strong>URL</strong> <span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(item.url || "")}</span></span>`);
+      if (item.durationMs != null) {
+        metaParts.push(`<span><strong>Duration</strong> ${escapeHtml(String(item.durationMs))} ms</span>`);
+      }
+      metaParts.push(`<span><strong>When</strong> ${escapeHtml(formatHistoryTime(item.at))}</span>`);
+      historyDetailMeta.innerHTML = metaParts.join("");
+
+      historyDetailHeaders.textContent = item.headersText != null ? String(item.headersText) : "(no headers)";
+      historySelectedBodyRaw = item.bodyRaw != null ? String(item.bodyRaw) : "";
+      applyHistoryBodyDisplay(false);
+    }
+
+    async function clearAllHistory() {
+      if (!confirm("Remove all run history from this device?")) return;
+      if (window.httpClient && typeof window.httpClient.historyClear === "function") {
+        await window.httpClient.historyClear();
+      } else {
+        persistRunHistoryLocal([]);
+      }
+      selectedHistoryEntryId = null;
+      await refreshHistoryList();
+      hideHistoryDetail();
+    }
+
+    clearHistoryBtn.addEventListener("click", () => clearAllHistory());
+
+    exportHistoryRawBtn.addEventListener("click", async () => {
+      const items = await loadRunHistoryAsync();
+      const item = items.find((x) => x.id === selectedHistoryEntryId);
+      if (!item) return;
+      const base = responseExportBasename();
+      const safe = formatHistoryTime(item.at).replace(/[/\\:]/g, "-");
+      triggerDownload(`${base}-history-raw-${safe}.txt`, item.bodyRaw != null ? String(item.bodyRaw) : "", "text/plain;charset=utf-8");
+    });
+
+    function isFileProtocolUi() {
+      return window.location.protocol === "file:";
+    }
+
+    function postMessageTarget() {
+      return isFileProtocolUi() ? "*" : window.location.origin;
+    }
+
+    function responsePopupHref() {
+      if (isFileProtocolUi()) {
+        const href = window.location.href.split("#")[0];
+        return href.replace(/[^/]+$/i, "") + "response-popup.html";
+      }
+      return `${window.location.origin}/response-popup.html`;
+    }
+
+    async function sendProxyRequest(payload) {
+      if (window.httpClient && typeof window.httpClient.invokeProxy === "function") {
+        return window.httpClient.invokeProxy(payload);
+      }
+      return {
+        ok: false,
+        error: "Open this app with npm start (Electron). Requests are sent through the desktop shell, not the browser alone.",
+      };
+    }
+
+    function buildViewerPayload() {
+      return {
+        type: "httpClientResponse",
+        statusHtml: statusBar.innerHTML,
+        bodyText: lastBodyRaw || outBody.textContent,
+        headersText: lastHeadersText || outHeaders.textContent,
+        bodyParsed: lastBodyParsed,
+        hiddenPaths: Array.from(responseHiddenPaths),
+        visibility: {
+          showStatus: visStatus.checked,
+          showTabs: visTabs.checked,
+          showBody: visBody.checked,
+          showHeaders: visHeaders.checked,
+          showJsonTree: visJsonTree.checked,
+        },
+        bodySource: activeBodySource,
+      };
+    }
+
+    function broadcastToPopup() {
+      if (!popupRef || popupRef.closed) return;
+      try {
+        popupRef.postMessage(buildViewerPayload(), postMessageTarget());
+      } catch (_) {}
+    }
+
+    function responseExportBasename() {
+      try {
+        const raw = urlEl.value.trim();
+        if (!raw) return "response";
+        const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        const u = new URL(withScheme);
+        const host = u.hostname.replace(/^www\./i, "");
+        return host || "response";
+      } catch {
+        return "response";
+      }
+    }
+
+    function triggerDownload(filename, text, mime) {
+      const blob = new Blob([text], {
+        type: mime || "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function canExportOriginalBody() {
+      const t = (outBody.textContent || "").trim();
+      return t.length > 0 && t !== "(empty)";
+    }
+
+    function canExportFilteredBody() {
+      const t = (outFiltered.textContent || "").trim();
+      if (!t) return false;
+      if (t.startsWith("(nothing selected")) return false;
+      return true;
+    }
+
+    function updateExportButtonsState() {
+      exportOriginalJsonBtn.disabled = !canExportOriginalBody();
+      const treeOn = visJsonTree.checked && visBody.checked;
+      exportFilteredJsonBtn.disabled = !treeOn || !canExportFilteredBody();
+    }
+
+    function syncBodySourceTabButtons() {
+      document.querySelectorAll(".body-source-tab").forEach((btn) => {
+        const v = btn.getAttribute("data-body-source");
+        const on = v === activeBodySource;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+    }
+
+    function syncBodySourceLayout() {
+      const treeOn = visJsonTree.checked && visBody.checked;
+      bodySourceTabsWrap.classList.toggle("hidden", !treeOn);
+      originalViewHint.classList.toggle("hidden", !treeOn);
+
+      if (!treeOn) {
+        activeBodySource = "original";
+        syncBodySourceTabButtons();
+        bodyPaneOriginal.classList.remove("hidden");
+        bodyPaneFiltered.classList.add("hidden");
+        treeLabel.classList.add("hidden");
+        jsonTreePanel.classList.add("hidden");
+        outFiltered.classList.add("hidden");
+      } else {
+        syncBodySourceTabButtons();
+        const showFiltered = activeBodySource === "filtered";
+        bodyPaneOriginal.classList.toggle("hidden", showFiltered);
+        bodyPaneFiltered.classList.toggle("hidden", !showFiltered);
+        const showFilterChrome = showFiltered;
+        treeLabel.classList.toggle("hidden", !showFilterChrome);
+        jsonTreePanel.classList.toggle("hidden", !showFilterChrome);
+        outFiltered.classList.toggle("hidden", !showFilterChrome);
+      }
+
+      updateExportButtonsState();
+    }
+
+    function applyRespVisibility() {
+      statusBar.classList.toggle("hidden", !visStatus.checked);
+      respTabsEl.classList.toggle("hidden", !visTabs.checked);
+      bodyStack.classList.toggle("hidden", !visBody.checked);
+      outHeaders.classList.toggle("hidden", !visHeaders.checked);
+
+      syncBodySourceLayout();
+
+      const tabsOn = visTabs.checked;
+      bodySectionTitle.classList.toggle("hidden", tabsOn);
+      headersSectionTitle.classList.toggle("hidden", tabsOn);
+      historySectionTitle.classList.toggle("hidden", tabsOn);
+
+      if (!tabsOn) {
+        bodySection.classList.remove("hidden");
+        headersSection.classList.remove("hidden");
+        historySection.classList.remove("hidden");
+      } else {
+        bodySection.classList.toggle("hidden", activeRespTab !== "body");
+        headersSection.classList.toggle("hidden", activeRespTab !== "headers");
+        historySection.classList.toggle("hidden", activeRespTab !== "history");
+      }
+    }
+
+    function syncRespTab(tab) {
+      activeRespTab = tab;
+      document.querySelectorAll("#respTabs .tab").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-resp-tab") === tab);
+      });
+      applyRespVisibility();
+    }
+
+    document.querySelectorAll("#respTabs .tab").forEach((btn) => {
+      btn.addEventListener("click", () => syncRespTab(btn.getAttribute("data-resp-tab")));
+    });
+
+    function setFilteredOutput(root, hiddenSet) {
+      const filtered = HttpClientResponse.filterByHidden(root, "", hiddenSet);
+      if (filtered === undefined) {
+        outFiltered.textContent = "(nothing selected — all top-level fields are hidden)";
+      } else {
+        outFiltered.textContent = JSON.stringify(filtered, null, 2);
+      }
+      updateExportButtonsState();
+    }
+
+    function refreshJsonTree() {
+      jsonTreePanel.replaceChildren();
+      outFiltered.textContent = "";
+      if (!visJsonTree.checked) {
+        updateExportButtonsState();
+        return;
+      }
+
+      if (typeof HttpClientResponse === "undefined") {
+        const err = document.createElement("p");
+        err.className = "hint";
+        err.textContent = "Could not load response-shared.js (JSON filter unavailable).";
+        jsonTreePanel.appendChild(err);
+        updateExportButtonsState();
+        return;
+      }
+
+      let root;
+      try {
+        root = HttpClientResponse.parseTreeRoot(lastBodyRaw, lastBodyParsed);
+      } catch (e) {
+        const err = document.createElement("p");
+        err.className = "hint";
+        err.textContent = "Could not parse response as JSON: " + (e && e.message ? e.message : String(e));
+        jsonTreePanel.appendChild(err);
+        updateExportButtonsState();
+        return;
+      }
+
+      if (root === null || root === undefined) {
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent =
+          "No JSON filter — the body is empty or not JSON. Filters apply to JSON objects, arrays, or a single JSON value.";
+        jsonTreePanel.appendChild(hint);
+        updateExportButtonsState();
+        return;
+      }
+
+      HttpClientResponse.pruneHiddenPaths(root, responseHiddenPaths);
+
+      HttpClientResponse.renderTopLevelJsonFilters(
+        jsonTreePanel,
+        root,
+        responseHiddenPaths,
+        (set) => {
+          setFilteredOutput(root, set);
+          broadcastToPopup();
+        }
+      );
+      setFilteredOutput(root, responseHiddenPaths);
+    }
+
+    document.querySelectorAll(".body-source-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const next = btn.getAttribute("data-body-source") || "original";
+        if (next === activeBodySource) return;
+        activeBodySource = next;
+        syncBodySourceLayout();
+        broadcastToPopup();
+      });
+    });
+
+    exportOriginalJsonBtn.addEventListener("click", () => {
+      if (!canExportOriginalBody()) return;
+      triggerDownload(`${responseExportBasename()}-response.json`, outBody.textContent);
+    });
+
+    exportFilteredJsonBtn.addEventListener("click", () => {
+      if (!canExportFilteredBody()) return;
+      triggerDownload(`${responseExportBasename()}-filtered.json`, outFiltered.textContent);
+    });
+
+    [visStatus, visTabs, visBody, visHeaders].forEach((el) => {
+      el.addEventListener("change", () => {
+        applyRespVisibility();
+        broadcastToPopup();
+      });
+    });
+
+    visJsonTree.addEventListener("change", () => {
+      applyRespVisibility();
+      refreshJsonTree();
+      broadcastToPopup();
+    });
+
+    popResponseBtn.addEventListener("click", () => {
+      popupRef = window.open(responsePopupHref(), "HttpClientResponse", "width=1100,height=800");
+      if (!popupRef) return;
+      const send = () => {
+        try {
+          popupRef.postMessage(buildViewerPayload(), postMessageTarget());
+        } catch (_) {}
+      };
+      if (popupRef.document.readyState === "complete") send();
+      else popupRef.addEventListener("load", send, { once: true });
+      setTimeout(send, 200);
+    });
+
+    function formatBody(text, parsed) {
+      if (parsed != null) return JSON.stringify(parsed, null, 2);
+      const t = (text || "").trim();
+      if (!t) return "(empty)";
+      try {
+        return JSON.stringify(JSON.parse(t), null, 2);
+      } catch {
+        return text;
+      }
+    }
+
+    function clearResponseState() {
+      lastBodyRaw = "";
+      lastBodyParsed = null;
+      lastHeadersText = "";
+      responseHiddenPaths = new Set();
+      activeBodySource = "original";
+      syncBodySourceTabButtons();
+      outBody.textContent = "";
+      outHeaders.textContent = "";
+      jsonTreePanel.replaceChildren();
+      outFiltered.textContent = "";
+      updateExportButtonsState();
+    }
+
+    function applyHttpResult(statusHtml, bodyDisplay, headersText, rawBody, parsedBody) {
+      statusBar.innerHTML = statusHtml;
+      lastBodyRaw = rawBody != null ? String(rawBody) : "";
+      lastBodyParsed = parsedBody !== undefined ? parsedBody : null;
+      lastHeadersText = headersText != null ? String(headersText) : "";
+      outBody.textContent = bodyDisplay;
+      outHeaders.textContent = lastHeadersText;
+      refreshJsonTree();
+      applyRespVisibility();
+      syncRespTab(activeRespTab);
+      broadcastToPopup();
+    }
+
+    sendBtn.addEventListener("click", async () => {
+      const rawUrl = urlEl.value.trim();
+      if (!rawUrl) {
+        statusBar.innerHTML = '<span class="badge err">Error</span><span class="response-meta">Enter a URL</span>';
+        clearResponseState();
+        applyRespVisibility();
+        syncRespTab(activeRespTab);
+        broadcastToPopup();
+        return;
+      }
+
+      let finalUrl;
+      mergeQueryParamsFromUrlField();
+      const queryParams = { ...collectKv(paramsContainer) };
+      const headers = { ...collectKv(headersContainer) };
+      applyAuth(headers, queryParams);
+
+      try {
+        finalUrl = buildFinalUrl(rawUrl, queryParams);
+      } catch {
+        statusBar.innerHTML = '<span class="badge err">Error</span><span class="response-meta">Invalid URL</span>';
+        clearResponseState();
+        applyRespVisibility();
+        syncRespTab(activeRespTab);
+        broadcastToPopup();
+        return;
+      }
+
+      const method = methodEl.value;
+      let body = undefined;
+      if (["POST", "PUT", "PATCH"].includes(method)) {
+        const raw = bodyEl.value.trim();
+        if (raw) {
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            body = raw;
+          }
+        }
+      }
+
+      sendBtn.disabled = true;
+      statusBar.innerHTML = '<span class="response-meta">Sending…</span>';
+      clearResponseState();
+      applyRespVisibility();
+      syncRespTab(activeRespTab);
+      broadcastToPopup();
+
+      const started = Date.now();
+      try {
+        const data = await sendProxyRequest({ url: finalUrl, method, headers, body });
+        const durationMs = Date.now() - started;
+
+        if (!data.ok) {
+          const msg = data.error || "Unknown error";
+          const display = typeof data.error === "string" ? data.error : JSON.stringify(data, null, 2);
+          let parsed = null;
+          try {
+            parsed = JSON.parse(display);
+          } catch {
+            parsed = null;
+          }
+          applyHttpResult(
+            `<span class="badge err">Failed</span><span class="response-meta">${escapeHtml(msg)}</span>`,
+            display,
+            "",
+            display,
+            parsed
+          );
+          await appendRunHistory({
+            id: newRequestId(),
+            at: Date.now(),
+            method,
+            url: finalUrl,
+            requestOk: false,
+            status: null,
+            statusMessage: "",
+            errorLabel: msg,
+            headersText: "",
+            bodyRaw: normalizeWireBody(display),
+            durationMs,
+          });
+          return;
+        }
+
+        const ok = data.status >= 200 && data.status < 300;
+        const statusHtml = `
+          <span class="badge ${ok ? "ok" : "err"}">${data.status} ${escapeHtml(data.statusMessage || "")}</span>
+          <span class="response-meta">${ok ? "OK" : "Non-success status"}</span>
+        `;
+        const hdrLines = Object.entries(data.headers || {}).map(
+          ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`
+        );
+        const headersText = hdrLines.length ? hdrLines.join("\n") : "(no headers)";
+        const bodyDisplay = formatBody(data.body, data.bodyParsed);
+        applyHttpResult(
+          statusHtml,
+          bodyDisplay,
+          headersText,
+          data.body,
+          data.bodyParsed
+        );
+        await appendRunHistory({
+          id: newRequestId(),
+          at: Date.now(),
+          method,
+          url: finalUrl,
+          requestOk: true,
+          status: data.status,
+          statusMessage: data.statusMessage || "",
+          errorLabel: null,
+          headersText,
+          bodyRaw: normalizeWireBody(data.body),
+          durationMs,
+        });
+      } catch (e) {
+        const durationMs = Date.now() - started;
+        const t = String(e);
+        applyHttpResult(
+          `<span class="badge err">Error</span><span class="response-meta">${escapeHtml(e.message)}</span>`,
+          t,
+          "",
+          t,
+          null
+        );
+        await appendRunHistory({
+          id: newRequestId(),
+          at: Date.now(),
+          method,
+          url: finalUrl,
+          requestOk: false,
+          status: null,
+          statusMessage: "",
+          errorLabel: e.message || "Error",
+          headersText: "",
+          bodyRaw: normalizeWireBody(t),
+          durationMs,
+        });
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    document.getElementById("newRequestBtn").addEventListener("click", () => newRequestDraft());
+    document.getElementById("saveRequestBtn").addEventListener("click", () => saveRequest());
+    document.getElementById("saveRequestAsBtn").addEventListener("click", () => saveRequestAsPrompt());
+
+    syncRespTab("body");
+    if (!restoreLastOrDefaultRequest()) {
+      addKvRow(headersContainer, "Accept", "application/json");
+    }
+    if (window.httpClient && typeof window.httpClient.onHistoryUpdated === "function") {
+      window.httpClient.onHistoryUpdated(() => {
+        void refreshHistoryList();
+      });
+    }
+
+    (async () => {
+      await migrateHistoryFromLocalStorage();
+      await refreshHistoryList();
+    })();
+  </script>
+</body>
+</html>

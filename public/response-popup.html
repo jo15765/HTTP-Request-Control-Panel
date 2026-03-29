@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Response — HTTP Client</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep: #07080c;
+      --bg: #0c0e14;
+      --surface: #181c27;
+      --border: rgba(255, 255, 255, 0.06);
+      --text: #f1f3f7;
+      --text-secondary: #9aa3b2;
+      --text-tertiary: #6b7280;
+      --accent: #818cf8;
+      --accent-dim: rgba(129, 140, 248, 0.12);
+      --success: #4ade80;
+      --success-dim: rgba(74, 222, 128, 0.12);
+      --error: #f87171;
+      --error-dim: rgba(248, 113, 113, 0.1);
+      --font-sans: "Inter", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --radius-sm: 7px;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .resp-toolbar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .toolbar-title {
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-right: 10px;
+    }
+    .resp-toolbar__label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-right: 4px;
+    }
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .toggle-chip:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--text);
+    }
+    .toggle-chip:has(input:checked) {
+      border-color: rgba(129, 140, 248, 0.35);
+      background: var(--accent-dim);
+      color: var(--text);
+    }
+    .toggle-chip input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .main-scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 20px 22px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-height: 44px;
+      padding: 10px 14px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg);
+    }
+    .badge.ok { color: var(--success); background: var(--success-dim); }
+    .badge.err { color: var(--error); background: var(--error-dim); }
+    .response-meta { color: var(--text-secondary); font-size: 13px; }
+    .resp-tabs {
+      display: inline-flex;
+      padding: 4px;
+      gap: 2px;
+      background: var(--bg-deep);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .resp-tabs button.tab {
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      padding: 7px 18px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .resp-tabs button.tab:hover { color: var(--text); }
+    .resp-tabs button.tab.active {
+      color: var(--text);
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+    pre {
+      margin: 0;
+      padding: 16px 18px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 80px;
+      color: #e2e6ed;
+    }
+    .json-filter-panel {
+      margin-top: 10px;
+      padding: 14px 16px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      overflow: auto;
+      max-height: 45vh;
+    }
+    .json-path-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .json-path-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      margin: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .json-path-row input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex-shrink: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .json-path-name {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 7rem;
+    }
+    .json-path-preview {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .json-path-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .json-path-block--parent-hidden .json-path-sublist {
+      opacity: 0.42;
+      pointer-events: none;
+    }
+    .json-path-sublist {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-left: 28px;
+      border-left: 2px solid rgba(129, 140, 248, 0.25);
+      margin-left: 6px;
+    }
+    .json-path-row--nested {
+      padding: 8px 12px;
+    }
+    .json-path-row--nested .json-path-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      min-width: 0;
+    }
+    #pBodyStack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 0;
+    }
+    .body-source-tabs-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .body-source-tabs-inner {
+      display: inline-flex;
+      padding: 4px;
+      gap: 2px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .body-source-tab {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .body-source-tab:hover { color: var(--text); }
+    .body-source-tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+    .body-view-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 0;
+    }
+    .body-view-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .body-view-toolbar__text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .body-view-toolbar__title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+    }
+    .body-view-toolbar__hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .btn-export {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .btn-export:hover:not(:disabled) {
+      border-color: var(--text-tertiary);
+      color: var(--text);
+      background: var(--surface);
+    }
+    .btn-export:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    #pBodyPaneFiltered .json-filter-panel {
+      margin-top: 0;
+      margin-bottom: 12px;
+      max-height: min(34vh, 360px);
+      flex-shrink: 0;
+    }
+    pre.body-pre--filtered {
+      flex: 1 1 auto;
+      min-height: 120px;
+      max-height: min(40vh, 400px);
+    }
+    .hidden { display: none !important; }
+    .sub-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-top: 14px;
+      margin-bottom: 6px;
+    }
+    .sub-label--tight { margin-top: 10px; }
+    .pre-spaced { margin-top: 10px; }
+    .waiting {
+      color: var(--text-secondary);
+      padding: 40px 24px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .pane-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="resp-toolbar">
+    <span class="toolbar-title">Response</span>
+    <span class="resp-toolbar__label">Show</span>
+    <label class="toggle-chip"><input type="checkbox" id="pVisStatus" checked /> Status</label>
+    <label class="toggle-chip"><input type="checkbox" id="pVisTabs" checked /> Tabs</label>
+    <label class="toggle-chip"><input type="checkbox" id="pVisBody" checked /> Body</label>
+    <label class="toggle-chip"><input type="checkbox" id="pVisHeaders" checked /> Headers</label>
+    <label class="toggle-chip"><input type="checkbox" id="pVisJsonTree" checked /> JSON filter</label>
+  </div>
+  <div class="main-scroll">
+    <p class="waiting" id="pWaiting">Waiting for a response from the main window…</p>
+    <div id="pContent" class="hidden">
+      <div class="status-bar" id="pStatusBar"></div>
+      <div class="resp-tabs" id="pRespTabs">
+        <button type="button" class="tab active" data-p-tab="body">Body</button>
+        <button type="button" class="tab" data-p-tab="headers">Headers</button>
+      </div>
+      <div id="pBodySection">
+        <div class="pane-title hidden" id="pBodySectionTitle">Body</div>
+        <div id="pBodyStack">
+          <div class="body-source-tabs-wrap hidden" id="pBodySourceTabsWrap" role="tablist" aria-label="Response body source">
+            <div class="body-source-tabs-inner">
+              <button type="button" class="body-source-tab active" data-p-body-source="original" role="tab" aria-selected="true">Original</button>
+              <button type="button" class="body-source-tab" data-p-body-source="filtered" role="tab" aria-selected="false">Filtered</button>
+            </div>
+          </div>
+          <div id="pBodyPaneOriginal" class="body-view-pane">
+            <div class="body-view-toolbar">
+              <div class="body-view-toolbar__text">
+                <span class="body-view-toolbar__title">Response body</span>
+                <span class="body-view-toolbar__hint hidden" id="pOriginalViewHint">As returned by the server</span>
+              </div>
+              <button type="button" class="btn-export" id="pExportOriginal">Export JSON</button>
+            </div>
+            <pre id="pOutBody"></pre>
+          </div>
+          <div id="pBodyPaneFiltered" class="body-view-pane hidden">
+            <div class="body-view-toolbar">
+              <div class="body-view-toolbar__text">
+                <span class="body-view-toolbar__title">Filtered JSON</span>
+                <span class="body-view-toolbar__hint">Adjust checkboxes below, then export this view</span>
+              </div>
+              <button type="button" class="btn-export" id="pExportFiltered">Export JSON</button>
+            </div>
+            <div class="sub-label sub-label--tight hidden" id="pTreeLabel">Include fields (top-level and inside array objects)</div>
+            <div id="pJsonTree" class="json-filter-panel hidden"></div>
+            <pre id="pOutFiltered" class="hidden body-pre--filtered"></pre>
+          </div>
+        </div>
+      </div>
+      <div id="pHeadersSection" class="hidden">
+        <div class="pane-title hidden" id="pHeadersSectionTitle">Headers</div>
+        <pre id="pOutHeaders"></pre>
+      </div>
+    </div>
+  </div>
+  <script src="response-shared.js"></script>
+  <script>
+    (function () {
+      const isFileUi = window.location.protocol === "file:";
+      const waiting = document.getElementById("pWaiting");
+      const content = document.getElementById("pContent");
+      const statusBar = document.getElementById("pStatusBar");
+      const respTabs = document.getElementById("pRespTabs");
+      const bodySection = document.getElementById("pBodySection");
+      const headersSection = document.getElementById("pHeadersSection");
+      const bodyStack = document.getElementById("pBodyStack");
+      const outBody = document.getElementById("pOutBody");
+      const outHeaders = document.getElementById("pOutHeaders");
+      const jsonTree = document.getElementById("pJsonTree");
+      const treeLabel = document.getElementById("pTreeLabel");
+      const outFiltered = document.getElementById("pOutFiltered");
+      const bodySectionTitle = document.getElementById("pBodySectionTitle");
+      const headersSectionTitle = document.getElementById("pHeadersSectionTitle");
+      const bodySourceTabsWrap = document.getElementById("pBodySourceTabsWrap");
+      const bodyPaneOriginal = document.getElementById("pBodyPaneOriginal");
+      const bodyPaneFiltered = document.getElementById("pBodyPaneFiltered");
+      const originalViewHint = document.getElementById("pOriginalViewHint");
+      const exportOriginalBtn = document.getElementById("pExportOriginal");
+      const exportFilteredBtn = document.getElementById("pExportFiltered");
+
+      const visStatus = document.getElementById("pVisStatus");
+      const visTabs = document.getElementById("pVisTabs");
+      const visBody = document.getElementById("pVisBody");
+      const visHeaders = document.getElementById("pVisHeaders");
+      const visJsonTree = document.getElementById("pVisJsonTree");
+
+      let hiddenPaths = new Set();
+      let bodyParsed = null;
+      let bodyText = "";
+      let activeTab = "body";
+      let activeBodySource = "original";
+
+      function triggerDownload(filename, text) {
+        const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function canExportOriginal() {
+        const t = (outBody.textContent || "").trim();
+        return t.length > 0 && t !== "(empty)";
+      }
+
+      function canExportFiltered() {
+        const t = (outFiltered.textContent || "").trim();
+        if (!t) return false;
+        if (t.startsWith("(nothing selected")) return false;
+        return true;
+      }
+
+      function updateExportButtonsState() {
+        exportOriginalBtn.disabled = !canExportOriginal();
+        const treeOn = visJsonTree.checked && visBody.checked;
+        exportFilteredBtn.disabled = !treeOn || !canExportFiltered();
+      }
+
+      function syncBodySourceTabButtons() {
+        document.querySelectorAll("[data-p-body-source]").forEach((btn) => {
+          const v = btn.getAttribute("data-p-body-source");
+          const on = v === activeBodySource;
+          btn.classList.toggle("active", on);
+          btn.setAttribute("aria-selected", on ? "true" : "false");
+        });
+      }
+
+      function syncBodySourceLayout() {
+        const treeOn = visJsonTree.checked && visBody.checked;
+        bodySourceTabsWrap.classList.toggle("hidden", !treeOn);
+        originalViewHint.classList.toggle("hidden", !treeOn);
+
+        if (!treeOn) {
+          activeBodySource = "original";
+          syncBodySourceTabButtons();
+          bodyPaneOriginal.classList.remove("hidden");
+          bodyPaneFiltered.classList.add("hidden");
+          treeLabel.classList.add("hidden");
+          jsonTree.classList.add("hidden");
+          outFiltered.classList.add("hidden");
+        } else {
+          syncBodySourceTabButtons();
+          const showFiltered = activeBodySource === "filtered";
+          bodyPaneOriginal.classList.toggle("hidden", showFiltered);
+          bodyPaneFiltered.classList.toggle("hidden", !showFiltered);
+          const showChrome = showFiltered;
+          treeLabel.classList.toggle("hidden", !showChrome);
+          jsonTree.classList.toggle("hidden", !showChrome);
+          outFiltered.classList.toggle("hidden", !showChrome);
+        }
+        updateExportButtonsState();
+      }
+
+      function applyVisibility() {
+        statusBar.classList.toggle("hidden", !visStatus.checked);
+        respTabs.classList.toggle("hidden", !visTabs.checked);
+        bodyStack.classList.toggle("hidden", !visBody.checked);
+        outHeaders.classList.toggle("hidden", !visHeaders.checked);
+
+        syncBodySourceLayout();
+
+        const tabsOn = visTabs.checked;
+        bodySectionTitle.classList.toggle("hidden", tabsOn);
+        headersSectionTitle.classList.toggle("hidden", tabsOn);
+
+        if (!tabsOn) {
+          bodySection.classList.remove("hidden");
+          headersSection.classList.remove("hidden");
+        } else {
+          bodySection.classList.toggle("hidden", activeTab !== "body");
+          headersSection.classList.toggle("hidden", activeTab !== "headers");
+        }
+      }
+
+      function syncTabPanels(tab) {
+        activeTab = tab;
+        document.querySelectorAll("#pRespTabs .tab").forEach((b) => {
+          b.classList.toggle("active", b.getAttribute("data-p-tab") === tab);
+        });
+        applyVisibility();
+      }
+
+      document.querySelectorAll("#pRespTabs .tab").forEach((btn) => {
+        btn.addEventListener("click", () => syncTabPanels(btn.getAttribute("data-p-tab")));
+      });
+
+      document.querySelectorAll("[data-p-body-source]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeBodySource = btn.getAttribute("data-p-body-source") || "original";
+          syncBodySourceLayout();
+        });
+      });
+
+      exportOriginalBtn.addEventListener("click", () => {
+        if (!canExportOriginal()) return;
+        triggerDownload("response.json", outBody.textContent);
+      });
+
+      exportFilteredBtn.addEventListener("click", () => {
+        if (!canExportFiltered()) return;
+        triggerDownload("response-filtered.json", outFiltered.textContent);
+      });
+
+      [visStatus, visTabs, visBody, visHeaders].forEach((el) => {
+        el.addEventListener("change", () => applyVisibility());
+      });
+
+      visJsonTree.addEventListener("change", () => {
+        applyVisibility();
+        refreshTreeAndFilter();
+      });
+
+      function setFilteredOut(root, set) {
+        const filtered = HttpClientResponse.filterByHidden(root, "", set);
+        if (filtered === undefined) {
+          outFiltered.textContent = "(nothing selected — all top-level fields are hidden)";
+        } else {
+          outFiltered.textContent = JSON.stringify(filtered, null, 2);
+        }
+        updateExportButtonsState();
+      }
+
+      function refreshTreeAndFilter() {
+        jsonTree.replaceChildren();
+        outFiltered.textContent = "";
+        if (!visJsonTree.checked) {
+          updateExportButtonsState();
+          return;
+        }
+
+        if (typeof HttpClientResponse === "undefined") {
+          const err = document.createElement("p");
+          err.className = "hint";
+          err.textContent = "JSON filter unavailable.";
+          jsonTree.appendChild(err);
+          updateExportButtonsState();
+          return;
+        }
+
+        const root = HttpClientResponse.parseTreeRoot(bodyText, bodyParsed);
+        if (root === null || root === undefined) {
+          const hint = document.createElement("p");
+          hint.className = "hint";
+          hint.textContent =
+            "Body is empty or not JSON — filtering applies to JSON objects, arrays, or a single JSON value.";
+          jsonTree.appendChild(hint);
+          updateExportButtonsState();
+          return;
+        }
+
+        HttpClientResponse.pruneHiddenPaths(root, hiddenPaths);
+        HttpClientResponse.renderTopLevelJsonFilters(jsonTree, root, hiddenPaths, (set) => {
+          setFilteredOut(root, set);
+        });
+        setFilteredOut(root, hiddenPaths);
+      }
+
+      function applyPayload(d) {
+        waiting.classList.add("hidden");
+        content.classList.remove("hidden");
+
+        statusBar.innerHTML = d.statusHtml || "";
+        bodyText = d.bodyText || "";
+        outBody.textContent = bodyText;
+        outHeaders.textContent = d.headersText || "";
+        bodyParsed = d.bodyParsed !== undefined ? d.bodyParsed : null;
+        hiddenPaths = new Set(Array.isArray(d.hiddenPaths) ? d.hiddenPaths : []);
+
+        if (d.visibility) {
+          visStatus.checked = !!d.visibility.showStatus;
+          visTabs.checked = !!d.visibility.showTabs;
+          visBody.checked = !!d.visibility.showBody;
+          visHeaders.checked = !!d.visibility.showHeaders;
+          visJsonTree.checked = !!d.visibility.showJsonTree;
+        }
+
+        if (d.bodySource === "original" || d.bodySource === "filtered") {
+          activeBodySource = d.bodySource;
+        } else {
+          activeBodySource = "original";
+        }
+        syncBodySourceTabButtons();
+        refreshTreeAndFilter();
+        syncTabPanels("body");
+      }
+
+      window.addEventListener("message", (e) => {
+        if (!isFileUi && e.origin !== window.location.origin) return;
+        const d = e.data;
+        if (!d || d.type !== "httpClientResponse") return;
+        applyPayload(d);
+      });
+    })();
+  </script>
+</body>
+</html>
